@@ -76,7 +76,7 @@ app.include_router(search.router, prefix=settings.API_V1_PREFIX, tags=["Search"]
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 5000))
+    port = int(os.getenv("PORT", 5000)) or settings.PORT
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",

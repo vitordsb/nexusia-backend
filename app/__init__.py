@@ -1,0 +1,2 @@
+"""NexusAI API - Aplicação principal."""
+

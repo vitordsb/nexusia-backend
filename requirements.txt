@@ -1,0 +1,33 @@
+# FastAPI e servidor ASGI
+fastapi==0.119.0
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20
+
+# Validação de dados
+pydantic==2.10.3
+pydantic-settings==2.6.1
+
+# Segurança e autenticação
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# Banco de dados MongoDB
+motor==3.6.0
+
+# Clientes HTTP para APIs externas
+httpx==0.28.1
+aiohttp==3.11.10
+
+# Provedores de IA - VERSÕES MAIS RECENTES
+openai==2.6.1
+anthropic==0.71.0
+google-genai==1.45.0
+
+# Utilitários
+python-dotenv==1.0.1
+
+# Testes
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+

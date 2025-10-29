@@ -83,7 +83,6 @@ if __name__ == "__main__":
         port = settings.PORT
     uvicorn.run(
         "app.main:app",
-        host="0.0.0.0",
         port=port,
         reload=settings.DEBUG
     )

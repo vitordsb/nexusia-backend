@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str
     ANTHROPIC_API_KEY: str
     GOOGLE_API_KEY: str
+    PORT: int
     
     # Chave de API para Web Search (Opcional)
     SERPAPI_API_KEY: str | None = None

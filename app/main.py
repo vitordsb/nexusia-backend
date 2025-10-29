@@ -5,8 +5,11 @@ Microsserviço de orquestração de múltiplas IAs.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
+from dotenv import load_dotenv
+import uvicorn
+import os
 
-
+load = load_dotenv()
 # Criar instância do FastAPI
 app = FastAPI(
     title=settings.APP_NAME,
@@ -73,7 +76,7 @@ app.include_router(search.router, prefix=settings.API_V1_PREFIX, tags=["Search"]
 
 
 if __name__ == "__main__":
-    import uvicorn
+    port = int(os.getenv("PORT", 5000))
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",

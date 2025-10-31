@@ -4,6 +4,7 @@ Microsserviço de orquestração de múltiplas IAs.
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import json
 from app.core.config import settings
 from dotenv import load_dotenv
 import uvicorn
@@ -19,14 +20,55 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Configurar CORS
+def _parse_cors(origins):
+    """Aceita list direta, JSON string ou CSV e normaliza."""
+    if isinstance(origins, list):
+        items = origins
+    else:
+        raw = str(origins or "").strip()
+        if not raw:
+            items = []
+        elif raw.startswith("["):
+            try:
+                items = json.loads(raw)
+            except Exception:
+                items = []
+        else:
+            items = [p.strip() for p in raw.split(",") if p.strip()]
+
+    def _norm(o: str) -> str:
+        s = o.strip().strip('"\'')
+        if s.startswith("http:") and not s.startswith("http://"):
+            s = s.replace("http:", "http://", 1)
+        if s.startswith("https:") and not s.startswith("https://"):
+            s = s.replace("https:", "https://", 1)
+        if not (s.startswith("http://") or s.startswith("https://")):
+            s = f"http://{s}"
+        return s.rstrip("/")
+
+    return [_norm(o) for o in items]
+
+allowed_origins = _parse_cors(getattr(settings, "CORS_ORIGINS", ["*"])) or [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=allowed_origins if "*" not in allowed_origins else ["*"],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"]
+    ,
+    allow_headers=["*"]
 )
+
+if settings.DEBUG:
+    try:
+        print("[CORS] Allowed origins:", ", ".join(allowed_origins))
+    except Exception:
+        pass
 
 
 @app.get("/")
@@ -83,6 +125,7 @@ if __name__ == "__main__":
         port = settings.PORT
     uvicorn.run(
         "app.main:app",
+        host="0.0.0.0",
         port=port,
         reload=settings.DEBUG
     )

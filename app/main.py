@@ -46,7 +46,41 @@ def _parse_cors(origins):
             s = f"http://{s}"
         return s.rstrip("/")
 
-    return [_norm(o) for o in items]
+    normalized = [_norm(o) for o in items if o]
+    seen = set()
+    deduped = []
+    for origin in normalized:
+        if origin not in seen:
+            seen.add(origin)
+            deduped.append(origin)
+    return deduped
+
+
+def _maybe_add_frontend_origins(origins: list[str]) -> list[str]:
+    frontend_base = getattr(settings, "FRONTEND_BASE_URL", None)
+    if not frontend_base:
+        return origins
+
+    extras = _parse_cors(frontend_base)
+    if not extras:
+        return origins
+
+    extras_with_mirror = []
+    for origin in extras:
+        extras_with_mirror.append(origin)
+        if origin.startswith("http://localhost:"):
+            mirror = origin.replace("http://localhost:", "http://127.0.0.1:", 1)
+            extras_with_mirror.append(mirror)
+
+    combined = origins + extras_with_mirror
+    seen = set()
+    deduped = []
+    for origin in combined:
+        if origin not in seen:
+            seen.add(origin)
+            deduped.append(origin)
+    return deduped
+
 
 allowed_origins = _parse_cors(getattr(settings, "CORS_ORIGINS", ["*"])) or [
     "http://localhost:5173",
@@ -54,6 +88,7 @@ allowed_origins = _parse_cors(getattr(settings, "CORS_ORIGINS", ["*"])) or [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
+allowed_origins = _maybe_add_frontend_origins(allowed_origins)
 
 app.add_middleware(
     CORSMiddleware,
@@ -102,7 +137,9 @@ async def startup_event():
 async def shutdown_event():
     """Evento executado ao encerrar a aplicação."""
     from app.db.mongodb import MongoDB
+    from app.services.credits_client import credits_client
     await MongoDB.disconnect()
+    await credits_client.aclose()
 
 
 # Importar e incluir routers

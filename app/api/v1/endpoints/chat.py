@@ -10,6 +10,7 @@ from app.db.conversation_repository import (
     ConversationRepository,
 )
 from app.db.models import MessageDocument, ConversationDocument
+from app.services.credits_client import credits_client
 
 
 router = APIRouter()
@@ -54,6 +55,8 @@ async def create_chat_completion(
             )
             await repo.create(conversation)
 
+    await credits_client.ensure_minimum_balance(current_user["user_id"], min_credits=1)
+
     try:
         response = await orchestrator.get_completion(request)
     except HTTPException:
@@ -96,5 +99,23 @@ async def create_chat_completion(
                 status_code=500,
                 detail="Falha ao registrar resposta da IA na conversa",
             )
+
+    usage = response.usage
+    if usage and usage.cost_credits > 0:
+        metadata = {
+            "conversation_id": request.conversation_id,
+            "model": request.model,
+            "mode": request.mode,
+            "prompt_tokens": usage.prompt_tokens,
+            "completion_tokens": usage.completion_tokens,
+            "cost_brl": usage.cost_brl,
+        }
+        await credits_client.debit(
+            user_id=current_user["user_id"],
+            amount=usage.cost_credits,
+            reference=f"chat:{response.id}",
+            reason="chat_completion",
+            metadata=metadata,
+        )
 
     return response

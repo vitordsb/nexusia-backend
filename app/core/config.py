@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     # Configurações Opcionais
     DEBUG: bool = False
     CORS_ORIGINS: list = ["*"]
+
+    # Integração com backendAuth
+    BACKEND_AUTH_BASE_URL: str = "http://localhost:4000"
+    FRONTEND_BASE_URL: Optional[str] = None
+    INTERNAL_SERVICE_TOKEN: str
     
     class Config:
         env_file = ".env"
@@ -43,4 +48,3 @@ class Settings(BaseSettings):
 
 # Instância global de configurações
 settings = Settings()
-

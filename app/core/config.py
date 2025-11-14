@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # Configurações Opcionais
     DEBUG: bool = False
     CORS_ORIGINS: list = ["*"]
+    ENABLE_CREDIT_SIMULATION: bool = False
+    LLM_REQUEST_TIMEOUT_SECONDS: int = 30
+    LLM_ENABLE_FALLBACK: bool = True
+    LLM_FALLBACK_MODEL: Optional[str] = "gemini-2-5-flash"
 
     # Integração com backendAuth
     BACKEND_AUTH_BASE_URL: str = "http://localhost:4000"

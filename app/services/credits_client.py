@@ -61,6 +61,12 @@ class CreditsClient:
 
     async def ensure_minimum_balance(self, user_id: str, min_credits: int = 1) -> Dict[str, Any]:
         """Valida se o usuário possui o saldo mínimo exigido."""
+        if settings.ENABLE_CREDIT_SIMULATION:
+            # Em modo de simulação, ignoramos o saldo real e retornamos um valor alto
+            return {
+                "credits": max(min_credits, 1000),
+                "simulated": True,
+            }
         summary = await self.get_balance(user_id)
         credits = int(summary.get("credits", 0))
         if credits < min_credits:
@@ -80,6 +86,10 @@ class CreditsClient:
     ) -> Dict[str, Any]:
         """Debita créditos através do backendAuth."""
         if amount <= 0:
+            return {}
+
+        if settings.ENABLE_CREDIT_SIMULATION:
+            # Não faz chamadas externas quando a simulação está ativa
             return {}
 
         payload = {

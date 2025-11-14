@@ -2,7 +2,8 @@
 Orquestrador de IA - Contexto do Padrão Strategy.
 Gerencia a seleção e execução dos provedores de IA.
 """
-from typing import Dict
+import asyncio
+from typing import Dict, Optional
 from app.api.v1.schemas import ChatCompletionRequest, ChatCompletionResponse
 from app.services.providers.base_provider import BaseProvider
 from app.core.config import settings
@@ -41,7 +42,10 @@ class LLMOrchestrator:
             "gemini-2-5-pro": GeminiProvider(settings.GOOGLE_API_KEY),
             "gemini-2-5-flash": GeminiProvider(settings.GOOGLE_API_KEY),
         }
-    
+        self.timeout_seconds = max(0, settings.LLM_REQUEST_TIMEOUT_SECONDS)
+        self.enable_fallback = settings.LLM_ENABLE_FALLBACK
+        self.fallback_model = settings.LLM_FALLBACK_MODEL
+
     async def get_completion(
         self,
         request: ChatCompletionRequest
@@ -66,9 +70,54 @@ class LLMOrchestrator:
                 detail=f"Modelo '{request.model}' não suportado. "
                        f"Modelos disponíveis: {list(self.providers.keys())}"
             )
-        
-        # Delega a geração para o provedor selecionado
-        return await provider.generate(request)
+
+        try:
+            return await self._execute_with_timeout(provider, request)
+        except asyncio.TimeoutError:
+            error_detail = f"O modelo {request.model} demorou demais para responder."
+        except Exception as exc:  # pragma: no cover
+            error_detail = f"Falha ao gerar resposta com {request.model}: {exc}"
+        else:  # pragma: no cover
+            error_detail = ""
+
+        # Tentativa de fallback em caso de erro/timeout
+        if self.enable_fallback:
+            fallback_model = self._resolve_fallback_model(request.model)
+            if fallback_model:
+                fallback_provider = self.providers.get(fallback_model)
+                if fallback_provider:
+                    fallback_request = request.model_copy(update={"model": fallback_model})
+                    try:
+                        return await self._execute_with_timeout(
+                            fallback_provider,
+                            fallback_request,
+                        )
+                    except Exception:
+                        pass
+
+        raise HTTPException(
+            status_code=503,
+            detail=error_detail or "Não foi possível gerar resposta no momento.",
+        )
+    
+    async def _execute_with_timeout(
+        self,
+        provider: BaseProvider,
+        request: ChatCompletionRequest,
+    ) -> ChatCompletionResponse:
+        if self.timeout_seconds <= 0:
+            return await provider.generate(request)
+        return await asyncio.wait_for(provider.generate(request), timeout=self.timeout_seconds)
+    
+    def _resolve_fallback_model(self, current_model: str) -> Optional[str]:
+        if self.fallback_model and self.fallback_model in self.providers:
+            if self.fallback_model != current_model:
+                return self.fallback_model
+        # Encontrar o primeiro modelo diferente disponível
+        for model_name in self.providers.keys():
+            if model_name != current_model:
+                return model_name
+        return None
     
     def get_available_models(self) -> list:
         """
@@ -78,4 +127,3 @@ class LLMOrchestrator:
             Lista de IDs de modelos disponíveis
         """
         return list(self.providers.keys())
-

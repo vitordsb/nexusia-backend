@@ -37,6 +37,11 @@ class PricingCalculator:
         "gemini-2-5-pro": {"input": 1, "output": 5},       # Premium
         "gemini-2-5-flash": {"input": 1, "output": 1},     # Econômico
     }
+    MODE_COMPLETION_TOKENS = {
+        "low": 1600,
+        "medium": 3600,
+        "high": 6400,
+    }
     
     @staticmethod
     def _normalize_model_name(model: str) -> str:
@@ -170,6 +175,14 @@ class PricingCalculator:
             return cls.calculate_credits(model, estimated_tokens, 0)
         else:
             return cls.calculate_credits(model, 0, estimated_tokens)
+    
+    @classmethod
+    def estimate_minimum_request_credits(cls, model: str, mode: str) -> int:
+        """
+        Estima o custo mínimo em créditos necessário para iniciar uma requisição.
+        """
+        completion_tokens = cls.MODE_COMPLETION_TOKENS.get(mode, cls.MODE_COMPLETION_TOKENS["medium"])
+        return cls.calculate_credits(model, 0, completion_tokens)
 
 
 # Custos fixos para serviços adicionais

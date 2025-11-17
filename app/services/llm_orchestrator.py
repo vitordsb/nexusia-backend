@@ -18,6 +18,7 @@ class LLMOrchestrator:
     todos os provedores disponíveis e delega a tarefa de geração para o
     provedor apropriado com base no modelo solicitado.
     """
+    _model_semaphores: Dict[str, asyncio.Semaphore] = {}
     
     def __init__(self):
         """Inicializa o orquestrador com todos os provedores disponíveis."""
@@ -45,6 +46,12 @@ class LLMOrchestrator:
         self.timeout_seconds = max(0, settings.LLM_REQUEST_TIMEOUT_SECONDS)
         self.enable_fallback = settings.LLM_ENABLE_FALLBACK
         self.fallback_model = settings.LLM_FALLBACK_MODEL
+        self.max_retries = max(1, settings.LLM_MAX_RETRIES)
+        self.retry_backoff = max(0.1, float(settings.LLM_RETRY_BACKOFF_SECONDS))
+        self.max_concurrent_requests = max(
+            1,
+            settings.LLM_MAX_CONCURRENT_REQUESTS_PER_MODEL
+        )
 
     async def get_completion(
         self,
@@ -105,9 +112,34 @@ class LLMOrchestrator:
         provider: BaseProvider,
         request: ChatCompletionRequest,
     ) -> ChatCompletionResponse:
-        if self.timeout_seconds <= 0:
-            return await provider.generate(request)
-        return await asyncio.wait_for(provider.generate(request), timeout=self.timeout_seconds)
+        semaphore = self._get_model_semaphore(request.model)
+        last_error: Exception | None = None
+
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                async with semaphore:
+                    if self.timeout_seconds <= 0:
+                        return await provider.generate(request)
+                    return await asyncio.wait_for(
+                        provider.generate(request),
+                        timeout=self.timeout_seconds,
+                    )
+            except asyncio.TimeoutError as exc:
+                last_error = exc
+            except Exception as exc:
+                if not self._is_transient_error(exc):
+                    raise
+                last_error = exc
+
+            if attempt == self.max_retries:
+                break
+
+            await asyncio.sleep(self.retry_backoff * attempt)
+
+        if last_error:
+            raise last_error
+
+        raise RuntimeError("Falha desconhecida ao executar o provedor LLM.")
     
     def _resolve_fallback_model(self, current_model: str) -> Optional[str]:
         if self.fallback_model and self.fallback_model in self.providers:
@@ -118,6 +150,33 @@ class LLMOrchestrator:
             if model_name != current_model:
                 return model_name
         return None
+
+    def _get_model_semaphore(self, model: str) -> asyncio.Semaphore:
+        semaphore = self._model_semaphores.get(model)
+        if semaphore is None:
+            semaphore = asyncio.Semaphore(self.max_concurrent_requests)
+            self._model_semaphores[model] = semaphore
+        return semaphore
+
+    @staticmethod
+    def _is_transient_error(exc: Exception) -> bool:
+        """
+        Detecta erros transitórios (rate limit/timeout) onde vale a pena tentar novamente.
+        """
+        message = str(exc).lower()
+        transient_keywords = [
+            "rate limit",
+            "429",
+            "too many requests",
+            "overloaded",
+            "temporarily unavailable",
+            "retry later",
+            "timeout",
+            "timed out",
+            "slowdown",
+            "unavailable",
+        ]
+        return any(keyword in message for keyword in transient_keywords)
     
     def get_available_models(self) -> list:
         """

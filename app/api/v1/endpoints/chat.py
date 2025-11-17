@@ -11,6 +11,7 @@ from app.db.conversation_repository import (
 )
 from app.db.models import MessageDocument, ConversationDocument
 from app.services.credits_client import credits_client
+from app.services.pricing import PricingCalculator
 
 
 router = APIRouter()
@@ -55,7 +56,18 @@ async def create_chat_completion(
             )
             await repo.create(conversation)
 
-    await credits_client.ensure_minimum_balance(current_user["user_id"], min_credits=1)
+    try:
+        min_required_credits = PricingCalculator.estimate_minimum_request_credits(
+            request.model,
+            request.mode,
+        )
+    except ValueError:
+        min_required_credits = 1
+
+    await credits_client.ensure_minimum_balance(
+        current_user["user_id"],
+        min_credits=min_required_credits,
+    )
 
     try:
         response = await orchestrator.get_completion(request)

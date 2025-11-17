@@ -49,18 +49,21 @@ class GptProvider(BaseProvider):
         mode_mapping = {
             "low": {
                 "reasoning": {"effort": "minimal"},
-                "text": {"verbosity": "low"}
+                "text": {"verbosity": "low"},
+                "max_output_tokens": 1600,
             },
             "medium": {
                 "reasoning": {"effort": "medium"},
-                "text": {"verbosity": "medium"}
+                "text": {"verbosity": "medium"},
+                "max_output_tokens": 3600,
             },
             "high": {
                 "reasoning": {"effort": "high"},
-                "text": {"verbosity": "high"}
-            }
+                "text": {"verbosity": "high"},
+                "max_output_tokens": 6400,
+            },
         }
-        return mode_mapping.get(mode, mode_mapping["medium"])
+        return mode_mapping.get(mode, mode_mapping["medium"]).copy()
 
     def _messages_to_input(self, messages: list) -> str:
         """
@@ -120,7 +123,7 @@ class GptProvider(BaseProvider):
             response = await self.client.responses.create(
                 model=request.model,
                 input=input_text,  # CORREÇÃO: 'input' ao invés de 'messages'
-                **mode_params  # CORREÇÃO: reasoning={"effort": ...}, text={"verbosity": ...}
+                **mode_params,  # inclui reasoning/text/max_output_tokens/temperature
             )
 
             # CORREÇÃO: Extrair texto da resposta no formato correto

@@ -87,6 +87,7 @@ allowed_origins = _parse_cors(getattr(settings, "CORS_ORIGINS", ["*"])) or [
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://nexusia-frontend.onrender.com",
 ]
 allowed_origins = _maybe_add_frontend_origins(allowed_origins)
 

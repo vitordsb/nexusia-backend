@@ -38,6 +38,17 @@ class PricingCalculator:
         "gemini-2-5-flash": {"input": 1, "output": 1},     # Econômico
     }
     
+    @staticmethod
+    def _normalize_model_name(model: str) -> str:
+        """
+        Normaliza o identificador do modelo para corresponder à tabela de preços.
+        Remove prefixo models/ (se existir) e converte pontos para hífens.
+        """
+        normalized = model.lower().strip()
+        if normalized.startswith("models/"):
+            normalized = normalized.split("/", 1)[1]
+        return normalized.replace(".", "-")
+
     @classmethod
     def calculate_credits(
         cls,
@@ -59,10 +70,12 @@ class PricingCalculator:
         Raises:
             ValueError: Se o modelo não for encontrado
         """
-        if model not in cls.PRICING_TABLE:
+        normalized_model = cls._normalize_model_name(model)
+
+        if normalized_model not in cls.PRICING_TABLE:
             raise ValueError(f"Modelo '{model}' não encontrado na tabela de preços")
-        
-        pricing = cls.PRICING_TABLE[model]
+
+        pricing = cls.PRICING_TABLE[normalized_model]
         
         # Calcular custo por 100 tokens
         input_cost = (prompt_tokens / 100) * pricing["input"]
@@ -106,10 +119,12 @@ class PricingCalculator:
         Returns:
             Dicionário com informações de preço
         """
-        if model not in cls.PRICING_TABLE:
+        normalized_model = cls._normalize_model_name(model)
+
+        if normalized_model not in cls.PRICING_TABLE:
             raise ValueError(f"Modelo '{model}' não encontrado")
-        
-        pricing = cls.PRICING_TABLE[model]
+
+        pricing = cls.PRICING_TABLE[normalized_model]
         
         return {
             "model": model,
@@ -179,4 +194,3 @@ class AdditionalServicesPricing:
     def get_search_cost(cls) -> int:
         """Retorna o custo em créditos para busca na web."""
         return cls.WEB_SEARCH
-

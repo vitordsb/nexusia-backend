@@ -31,14 +31,41 @@ class GeminiProvider(BaseProvider):
         """
         super().__init__(api_key)
         self.client = genai.Client(api_key=api_key)
-        
+
         # Modelos que suportam thinking (série 2.5)
         self.thinking_models = [
             "gemini-2-5-pro",
             "gemini-2-5-flash",
             "gemini-2-5-flash-lite"
         ]
-    
+
+        # Mapeia os IDs amigáveis usados no frontend/backend
+        # para os nomes oficiais da API Google AI (prefixados com models/)
+        self.model_aliases = {
+            "gemini-2-5-pro": "models/gemini-2.5-pro",
+            "gemini-2-5-flash": "models/gemini-2.5-flash",
+            "gemini-2-5-flash-lite": "models/gemini-2.5-flash-lite",
+        }
+
+    def _normalize_model_name(self, model: str) -> str:
+        """
+        Normaliza o nome do modelo para comparação na aplicação.
+        Remove prefixo models/ (se existir) e troca pontos por hífens.
+        """
+        normalized = model.lower().strip()
+        if normalized.startswith("models/"):
+            normalized = normalized.split("/", 1)[1]
+        return normalized.replace(".", "-")
+
+    def _resolve_api_model(self, model: str) -> tuple[str, str]:
+        """
+        Retorna o identificador normalizado usado internamente e o nome oficial
+        esperado pela API Google AI.
+        """
+        normalized = self._normalize_model_name(model)
+        api_model = self.model_aliases.get(normalized, model)
+        return normalized, api_model
+
     def _get_mode_params(self, mode: Literal["low", "medium", "high"], model: str) -> dict:
         """
         Retorna os parâmetros para cada modo, adaptados ao modelo.
@@ -50,8 +77,10 @@ class GeminiProvider(BaseProvider):
         Returns:
             Dicionário com configurações apropriadas
         """
+        normalized = self._normalize_model_name(model)
+
         # Verificar se o modelo suporta thinking
-        supports_thinking = any(tm in model for tm in self.thinking_models)
+        supports_thinking = any(normalized.startswith(tm) for tm in self.thinking_models)
         
         if supports_thinking:
             # Modelos 2.5 com thinking
@@ -109,7 +138,8 @@ class GeminiProvider(BaseProvider):
         """
         try:
             # Obter parâmetros do modo
-            mode_params = self._get_mode_params(request.mode, request.model)
+            normalized_model, api_model_name = self._resolve_api_model(request.model)
+            mode_params = self._get_mode_params(request.mode, normalized_model)
             
             # Separar system instruction das mensagens
             system_instruction = None
@@ -145,7 +175,7 @@ class GeminiProvider(BaseProvider):
             
             # Fazer chamada para a Gemini API
             response = self.client.models.generate_content(
-                model=request.model,
+                model=api_model_name,
                 contents=contents,
                 config=config
             )
@@ -194,4 +224,3 @@ class GeminiProvider(BaseProvider):
         
         except Exception as e:
             raise Exception(f"Erro ao chamar Google Gemini API: {str(e)}")
-
